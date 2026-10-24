@@ -1,0 +1,17 @@
+{
+  "name": "orcaterm-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Multi-account OpenAI-compatible proxy for OrcaTerm LightAI",
+  "scripts": {
+    "start": "node src/server.js",
+    "start:persona": "powershell -NoProfile -ExecutionPolicy Bypass -File start-proxy.ps1",
+    "check": "node src/server.js --check",
+    "login": "node src/open-login.js",
+    "import": "node src/import-file.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

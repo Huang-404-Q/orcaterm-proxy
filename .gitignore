@@ -1,0 +1,7 @@
+node_modules/
+.chrome-profile/
+bundles/
+evidence-*.json
+data/
+tmp/
+*.log
