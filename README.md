@@ -1,26 +1,30 @@
-# OrcaTerm 多账号反代
+# OrcaTerm Proxy
 
-把腾讯云 OrcaTerm 的 LightAI 助手转成 OpenAI 兼容接口。账号按轮询使用。
+[English](README.md) · [中文说明](README.zh-CN.md)
 
-## 启动
+An OpenAI-compatible proxy for accounts that can already access Tencent Cloud OrcaTerm's LightAI assistant. It rotates local accounts, accepts normal chat requests, and returns OpenAI-style JSON or server-sent events.
+
+This project does not bypass login, create accounts, or obtain credentials. You must import a session from an account you control.
+
+## Quick start
 
 ```bash
 npm start
 ```
 
-默认监听 `http://127.0.0.1:8787`。可用 `PORT`、`HOST`、`ACCOUNTS_FILE` 覆盖。
+The server listens on `http://127.0.0.1:8787`. Override it with `HOST`, `PORT`, or `ACCOUNTS_FILE`.
 
-带默认人设覆盖启动：
+Windows can also start it with the included persona override:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File start-proxy.ps1
 ```
 
-`start-proxy.ps1` 会设置 `INJECT_SYSTEM`。请求里的 `system` 和 `developer` 消息也会自动放到上游的高优先级位置。
+`INJECT_SYSTEM` is prepended to instructions from `system` and `developer` messages. Those instructions are sent both in the upstream priority field and at the start of the model input.
 
-## 导入账号
+## Import an account
 
-支持整段 Cookie、JSON，或一行一个 `uin skey`：
+The required login material is `uin` plus either `skey` or `p_skey`.
 
 ```bash
 curl -X POST http://127.0.0.1:8787/accounts \
@@ -28,20 +32,51 @@ curl -X POST http://127.0.0.1:8787/accounts \
   -d '{"accounts":[{"cookie":"uin=o123456789; skey=YOUR_SKEY; p_skey=YOUR_P_SKEY"}]}'
 ```
 
-同一个 `uin` 再次导入会覆盖旧登录态。`PUT /accounts` 会整池替换，`GET /accounts` 只返回账号编号和失败次数，不回显密钥。`DELETE /accounts/<uin>` 删除一个账号。
+Accepted formats:
 
-登录态从已登录的 `https://orcaterm.cloud.tencent.com/terminal` 取。必需字段是 `uin` 和 `skey` 或 `p_skey`。
+- A `Cookie` header string.
+- Browser-exported cookie JSON.
+- A Netscape `cookies.txt` file: `npm run import -- cookies.txt`.
+- One account per line: `uin skey [p_skey]`.
 
-## 调用
+`POST /accounts` adds or replaces an account with the same UIN. `PUT /accounts` replaces the pool. `GET /accounts` returns IDs and status only, never key material. `DELETE /accounts/<uin>` removes one account.
+
+## Call the API
 
 ```bash
 curl http://127.0.0.1:8787/v1/chat/completions \
   -H "content-type: application/json" \
-  -d '{"model":"deepseek-chat-latest","messages":[{"role":"user","content":"你好"}]}'
+  -d '{"model":"kimi-latest","messages":[{"role":"user","content":"Write a Node.js function that counts .js files."}]}'
 ```
 
-`stream: false` 返回完整 JSON，默认按 OpenAI 的 SSE 分片返回。模型列表在 `GET /v1/models`。
+Set `"stream": false` for one JSON response. The default is OpenAI-compatible SSE. Model identifiers are listed by `GET /v1/models`.
 
-## 限制
+Point an OpenAI SDK at the proxy:
 
-多轮对话会被拼成一次输入发给上游，因为上游会话状态绑定腾讯云账号，不保证能用本地历史回放。工具调用和终端命令执行没有透传。
+```js
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: "local",
+  baseURL: "http://127.0.0.1:8787/v1",
+});
+```
+
+## What the proxy changes
+
+- Account cookies are stored only in the local `data/` directory, which is gitignored.
+- Upstream task JSON is reduced to its visible answer.
+- A tool-review action is returned as readable text beginning with `[模型请求执行工具 ...]`; the proxy does not execute tools.
+- Empty upstream responses and gateway failures are retried up to three times.
+
+## Limitations
+
+The upstream assistant is stateful and optimized for OrcaTerm workflows. Conversation history is sent as one new request, so exact multi-turn state is not guaranteed. Availability, quota, and model access are controlled by the upstream account.
+
+## Development
+
+```bash
+npm test
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). The license is [MIT](LICENSE).
